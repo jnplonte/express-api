@@ -3,6 +3,7 @@ import * as helmet from 'helmet';
 import * as compression from 'compression';
 import * as cors from 'cors';
 import * as bodyParser from 'body-parser';
+import { expressCspHeader, SELF, EVAL } from 'express-csp-header';
 
 import * as authenticationRoutes from './routes/authentication-route';
 import * as coreRoutes from './routes/core-route';
@@ -54,10 +55,16 @@ class App {
 	}
 
 	private implementDocumentation(): void {
-		if (this.env === 'production') {
-			// do something here
-		} else {
-			this.express.use('/documentation', express.static(__dirname + '/doc'));
+		if (this.env !== 'production') {
+			this.express.use(
+				'/documentation',
+				expressCspHeader({
+					directives: {
+						'script-src': [SELF, EVAL],
+					},
+				}),
+				express.static(__dirname + '/doc')
+			);
 		}
 	}
 
