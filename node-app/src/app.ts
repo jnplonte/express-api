@@ -1,11 +1,8 @@
 import * as express from 'express';
-import * as jwt from 'express-jwt';
 import * as helmet from 'helmet';
 import * as compression from 'compression';
 import * as cors from 'cors';
 import * as bodyParser from 'body-parser';
-
-import * as redisCache from 'express-redis-cache';
 
 import * as authenticationRoutes from './routes/authentication-route';
 import * as coreRoutes from './routes/core-route';
@@ -32,11 +29,10 @@ express['application']['version'] = express.Router['group'] = function (arg1, ar
 
 // process.env.TZ = 'Asia/Manila';
 
-const mysql = setup();
+const database = setup();
 
 class App {
 	public express;
-	public cache;
 	public env = process.env.NODE_ENV || 'local';
 
 	constructor() {
@@ -44,8 +40,6 @@ class App {
 		this.express.disable('x-powered-by');
 
 		this.addConfig();
-		this.implementToken();
-		this.implementCache();
 		this.implementDocumentation();
 		this.setRoute();
 		this.setNotFound();
@@ -59,39 +53,6 @@ class App {
 		this.express.use(bodyParser.urlencoded({ extended: true }));
 	}
 
-	private implementToken(): void {
-		this.express.use(
-			jwt({ secret: baseConfig.secretKeyHash, requestProperty: 'authentication', algorithms: ['HS256'] }).unless({
-				path: [/\/documentation*/, /\/v1\/auth*/],
-			})
-		);
-
-		this.express.use(function (err, req, res, next) {
-			if (err.name === 'UnauthorizedError') {
-				return res.status(401).json({
-					status: 'failed',
-					message: 'Invalid Authentication Token',
-					executionTime: 0,
-					data: '',
-				});
-			}
-		});
-	}
-	private implementCache(): void {
-		if (this.env === 'production') {
-			this.cache = redisCache({
-				host: baseConfig.cache[this.env].host,
-				port: baseConfig.cache[this.env].port,
-				auth_pass: baseConfig.cache[this.env].password,
-				expire: baseConfig.cache[this.env].expire,
-				prefix: baseConfig.name,
-			});
-			this.cache.on('message', (msg) => {
-				console.log('Cache Status:', msg);
-			});
-		}
-	}
-
 	private implementDocumentation(): void {
 		if (this.env === 'production') {
 			// do something here
@@ -101,8 +62,8 @@ class App {
 	}
 
 	private setRoute(): void {
-		this.express = authenticationRoutes.setup(this.express, this.cache, baseConfig, mysql);
-		this.express = coreRoutes.setup(this.express, this.cache, baseConfig, mysql);
+		this.express = authenticationRoutes.setup(this.express, baseConfig, database);
+		this.express = coreRoutes.setup(this.express, baseConfig, database);
 	}
 
 	private setNotFound(): void {

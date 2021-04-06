@@ -1,9 +1,9 @@
 {
-	"name": "Node Api",
+	"name": "Express Api",
 	"version": "1.0.0",
-	"description": "Node Api Documentation",
-	"title": "Node Api Documentation",
-	"url": "https://www.jnpl.me/playground/nodeapi/<version>",
+	"description": "Express Api Documentation",
+	"title": "Express Api Documentation",
+	"url": "https://www.jnpl.me/playground/expressapi/<version>",
 	"header": {
 		"title": "GETTING STARTED",
 		"filename": "apidoc-getting-started.md"

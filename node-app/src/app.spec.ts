@@ -1,5 +1,4 @@
 import * as supertest from 'supertest';
-import { expect } from 'chai';
 import { baseConfig } from './config';
 
 import app from './app';
@@ -26,20 +25,6 @@ describe('application start', () => {
 					return done(err);
 				}
 
-				done();
-			});
-	});
-
-	it('should return Unauthorized', (done) => {
-		supertest(app)
-			.get('/v1')
-			.expect('Content-Type', /json/)
-			.expect(401, function (err, res) {
-				if (err) {
-					return done(err);
-				}
-
-				expect(res.body.status).to.equal('failed');
 				done();
 			});
 	});

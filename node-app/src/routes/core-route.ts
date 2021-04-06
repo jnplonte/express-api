@@ -1,38 +1,51 @@
 import { Helper } from '../app/services/helper/helper.service';
 import { ApiResponse } from '../app/services/api-response/api-response.service';
-import { Query } from '../app/services/query/query.service';
+import { Mongo } from '../app/services/mongo/mongo.service';
 
 import { Users } from '../app/v1/core/users/users.component';
 
-import { Countries } from '../app/v1/core/countries/countries.component';
-import { Languages } from '../app/v1/core/languages/languages.component';
+export function setup(app, config, models) {
+	const response = new ApiResponse(),
+		helper = new Helper(config);
+	const mongo = new Mongo(config);
 
-export function setup(app, cache, config, models) {
-    const response = new ApiResponse(), helper = new Helper(config), query = new Query(config);
+	app.version('v1/core', (appCore) => {
+		appCore.use((req, res, next) => {
+			res.startTime = new Date().getTime();
+			if (
+				typeof req.headers === 'undefined' ||
+				helper.isEmpty(req.headers[config.secretKey]) ||
+				req.headers[config.secretKey] !== config.secretKeyHash
+			) {
+				return response.failed(res, 'token', '', 401);
+			}
 
-    app.version('v1/core', appCore => {
-        appCore.use((req, res, next) => {
-            res.startTime = new Date().getTime();
+			mongo
+				.getOne(models.users, {
+					active: true,
+					key: (req.headers['user-key'] || '') as string,
+				})
+				.then((user) => {
+					if (!user || helper.isEmptyObject(user)) {
+						return response.failed(res, 'token', '', 401);
+					}
 
-            if (typeof(req.authentication) === 'undefined' || helper.isEmpty(req.authentication.id)) {
-                return response.failed(res, 'token', '', 401);
-            }
+					req.userData = user;
+					req.models = models;
 
-            res.express_redis_cache_name = `${req.originalUrl}:`;
-            req.models = models;
+					if (!req.models) {
+						return response.failed(res, 'model', '', 500);
+					}
 
-            if (!req.models) {
-                return response.failed(res, 'model', '', 500);
-            }
+					next();
+				})
+				.catch((error) => {
+					return response.failed(res, 'token', '', 401);
+				});
+		});
 
-            next();
-        });
+		new Users(appCore, response, helper, mongo);
+	});
 
-        new Users(appCore, cache, response, helper, query);
-
-        new Countries(appCore, cache, response, helper, query);
-        new Languages(appCore, cache, response, helper, query);
-    });
-
-    return app;
+	return app;
 }

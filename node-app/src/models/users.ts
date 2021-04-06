@@ -1,180 +1,63 @@
-import {
-    Sequelize
-} from 'sequelize';
-
-const encodeKeyInformation = (data) => {
-    if (data['phone']) {
-        data['phone'] = Buffer.from(data['phone']).toString('base64');
-    }
-
-    if (data['email']) {
-        data['email'] = Buffer.from(data['email']).toString('base64');
-    }
-
-    return data;
-};
-const decodeKeyInformation = (data) => {
-    if (data['phone']) {
-        data['phone'] = Buffer.from(data['phone'], 'base64').toString('ascii');
-    }
-
-    if (data['email']) {
-        data['email'] = Buffer.from(data['email'], 'base64').toString('ascii');
-    }
-
-    return data;
-};
-
 export interface UsersAttributes {
-    id ?: string;
-    createdUserId ?: string;
-    createdAt ?: Date;
-    updatedUserId ?: string;
-    updatedAt ?: Date;
+	_id?: string;
 
-    firstName ?: string;
-    lastName ?: string;
-    email ?: string;
-    phone ?: string;
-    username ?: string;
-    password ?: string;
-    salt ?: string;
-    forgotPasswordKey ?: string;
-    lastLogin ?: Date;
-    loginCount ?: number;
-    roleId ?: number;
-    languageId ?: number;
-    countryId ?: number;
-    socialMedia ?: string;
-    socialMediaKey ?: string;
-    active ?: boolean;
-    verified ?: boolean;
-    verificationKey ?: string;
+	key?: string;
+	code?: string;
+	firstName?: string;
+	lastName?: string;
+	email?: string;
+	phone?: string;
+	active?: boolean;
 
-    loginAttempt ?: number;
-    passwordExpiry ?: Date;
+	updatedAt?: Date;
+	createdAt?: Date;
 }
 
-export default function(sequelize: Sequelize, dataTypes: any) {
-    const users = sequelize.define('users', {
-        id: {
-            type: dataTypes.UUID,
-            primaryKey: true,
-            defaultValue: dataTypes.UUIDV4
-        },
-        firstName: dataTypes.STRING,
-        lastName: dataTypes.STRING,
-        email: {
-            type: dataTypes.STRING,
-            unique: true,
-            validate: {
-                notEmpty: true
-            }
-        },
-        phone: dataTypes.STRING,
-        username: {
-            type: dataTypes.STRING,
-            validate: {
-                notEmpty: true
-            }
-        },
-        password: {
-            type: dataTypes.STRING,
-            validate: {
-                notEmpty: true
-            }
-        },
-        salt: dataTypes.STRING,
-        forgotPasswordKey: dataTypes.STRING,
-        lastLogin: dataTypes.DATE,
-        loginCount: dataTypes.INTEGER,
-        roleId: {
-            type: dataTypes.INTEGER,
-            references: {
-                model: 'roles',
-                key: 'id'
-            }
-        },
-        languageId: {
-            type: dataTypes.INTEGER,
-            references: {
-                model: 'languages',
-                key: 'id'
-            }
-        },
-        countryId: {
-            type: dataTypes.INTEGER,
-            references: {
-                model: 'countries',
-                key: 'id'
-            }
-        },
-        socialMedia: {
-            type: dataTypes.ENUM,
-            values: ['NONE', 'FACEBOOK']
-        },
-        socialMediaKey: dataTypes.STRING,
-        active: dataTypes.BOOLEAN,
+export default function userModel(mongoose) {
+	const userSchema = mongoose.Schema(
+		{
+			key: {
+				type: String,
+				required: true,
+			},
+			code: {
+				type: String,
+				required: true,
+			},
 
-        verified: dataTypes.BOOLEAN,
-        verificationKey: dataTypes.STRING,
+			firstName: {
+				type: String,
+			},
+			lastName: {
+				type: String,
+			},
+			email: {
+				type: String,
+			},
+			phone: {
+				type: String,
+			},
+			active: {
+				type: Boolean,
+				default: true,
+			},
 
-        loginAttempt: dataTypes.TINYINT,
-        passwordExpiry: dataTypes.DATE,
+			updatedAt: {
+				type: Date,
+				default: new Date(),
+			},
+			createdAt: {
+				type: Date,
+				default: new Date(),
+			},
+		},
+		{ collation: { locale: 'en', strength: 2 } }
+	);
 
-        createdUserId: dataTypes.UUID,
-        updatedUserId: dataTypes.UUID
-    },
-    {
-        hooks: {
-            beforeBulkCreate: (data: any) => {
-                if (data) {
-                    data = encodeKeyInformation(data);
-                }
-            },
-            beforeCreate: (data: any) => {
-                if (data) {
-                    data = encodeKeyInformation(data);
-                }
-            },
-            beforeBulkUpdate: (data: any) => {
-                if (data && typeof(data['attributes']) !== 'undefined') {
-                    data['attributes'] = encodeKeyInformation(data['attributes']);
-                }
-            },
-            beforeUpdate: (data: any) => {
-                if (data && typeof(data['attributes']) !== 'undefined') {
-                    data['attributes'] = encodeKeyInformation(data['attributes']);
-                }
-            },
-            afterFind: (data: any) => {
-                if (data) {
-                    if (data.constructor.name === 'Array') {
-                        data = data.map( (dataval) => {
-                            dataval = decodeKeyInformation(dataval);
-                            return dataval;
-                        });
-                    } else {
-                        data = decodeKeyInformation(data);
-                    }
-                }
-            }
-        }
-    });
+	userSchema.index({ active: 1, createdAt: -1 });
 
-    users['associate'] = (models) => {
-        models.users.belongsTo(models.roles, {
-            foreignKey: 'roleId'
-        });
-
-        models.users.belongsTo(models.languages, {
-            foreignKey: 'languageId'
-        });
-
-        models.users.belongsTo(models.countries, {
-            foreignKey: 'countryId'
-        });
-    };
-
-    return users;
+	return {
+		name: 'users',
+		model: mongoose.model('users', userSchema),
+	};
 }

@@ -4,36 +4,17 @@ import { CoreMiddleware } from '../../../middlewares/core/core.middleware';
 import { UsersAttributes } from './../../../../models/users';
 
 export class Users extends CoreMiddleware {
-	pageCache: any;
-	nameCache: string = '/v1/core/user*';
-
-	constructor(app, cache, private response, private helper, private query) {
-		super(app, cache);
-		this.pageCache = cache;
+	constructor(app, private response, private helper, private mongo) {
+		super(app);
 	}
 
 	get services() {
 		return {
-			'GET /myuser': 'getMe',
 			'GET /users': 'all',
 			'GET /user/:id': 'get',
-			'POST /user': 'post',
+			'POST /users': 'post',
 			'PUT /user/:id': 'put',
 			'DELETE /user/:id': 'delete',
-		};
-	}
-
-	get attributes(): any {
-		return {
-			exclude: [
-				'salt',
-				'password',
-				'forgotPasswordKey',
-				'verificationKey',
-				'socialMediaKey',
-				'createdUserId',
-				'updatedUserId',
-			],
 		};
 	}
 
@@ -51,15 +32,9 @@ export class Users extends CoreMiddleware {
 	 * @apiParam {Number} [page=1] page number Ex. ?page=1
 	 */
 	all(req: Request, res: Response): void {
-		const whereData = {
-			where: {
-				active: true,
-			},
-			include: this.getInclude(req.models),
-			attributes: this.attributes,
-		};
+		const whereData = {};
 
-		return this.query
+		return this.mongo
 			.getAll(req.models.users, whereData, req.query)
 			.then((users: any) => {
 				const { data, pagination } = users || { data: [], pagination: {} };
@@ -75,88 +50,47 @@ export class Users extends CoreMiddleware {
 	 * @apiGroup USERS
 	 * @apiPermission authenticated-user
 	 *
-	 * @apiDescription get one user
+	 * @apiDescription get user
 	 *
 	 * @apiParam (url segment) {String} id user id
 	 * @apiParam (url parameter) {String} key key search Ex. ?key=name
 	 */
 	get(req: Request, res: Response): void {
 		const whereData = {
-			where: {
-				active: true,
-			},
-			include: this.getInclude(req.models),
-			attributes: this.attributes,
+			[(req.query.key || '_id') as string]: req.params.id as string,
 		};
 
-		return this.query
-			.getOne(req.models.users, whereData, req.query.key, req.params.id)
-			.then((user: UsersAttributes) => this.response.success(res, 'get', user || {}))
-			.catch((error) => this.response.failed(res, 'get', error));
-	}
-
-	/**
-	 * @api {get} /core/myuser get my user
-	 * @apiVersion 1.0.0
-	 * @apiName getMe
-	 * @apiGroup USERS
-	 * @apiPermission authenticated-user
-	 *
-	 * @apiDescription get my user
-	 *
-	 */
-	getMe(req: Request, res: Response): void {
-		const whereData = {
-			where: {
-				id: req.authentication.id || null,
-				active: true,
-			},
-			include: this.getInclude(req.models),
-			attributes: this.attributes,
-		};
-
-		return this.query
+		return this.mongo
 			.getOne(req.models.users, whereData)
 			.then((user: UsersAttributes) => this.response.success(res, 'get', user || {}))
 			.catch((error) => this.response.failed(res, 'get', error));
 	}
 
 	/**
-	 * @api {post} /core/user insert user
+	 * @api {post} /core/users insert user
 	 * @apiVersion 1.0.0
 	 * @apiName post
 	 * @apiGroup USERS
 	 * @apiPermission authenticated-user
-	 *
 	 * @apiDescription insert user
 	 *
+	 * @apiParam (body) {String} code user code
 	 * @apiParam (body) {String} firstName first name
 	 * @apiParam (body) {String} lastName last name
 	 * @apiParam (body) {String} email unique email address
-	 * @apiParam (body) {String} username unique user name
-	 * @apiParam (body) {String} password MD5 hash password
-	 * @apiParam (body) {String} [phone] contact number
-	 * @apiParam (body) {String} [socialMedia=NONE] social media <br /> Expected Value: `FACEBOOK|INSTAGRAM|TWITTER`
-	 * @apiParam (body) {String} [socialMediaKey] social media key
-	 * @apiParam (body) {Number} [languageId] language id
-	 * @apiParam (body) {Number} [roleId] role id
+	 * @apiParam (body) {String} phone unique phone number
 	 */
 	post(req: Request, res: Response): void {
-		const reqParameters = ['firstName', 'lastName', 'email', 'username', 'password'];
+		const reqParameters = ['code', 'firstName', 'lastName', 'email'];
 		if (!this.helper.validateData(req.body, reqParameters)) {
 			return this.response.failed(res, 'data', reqParameters);
 		}
 
-		const data = this.autoFillPostInformation(req.body, req.authentication);
+		const data = this.autoFillPostInformation(req.body, {});
 
-		return this.query
+		return this.mongo
 			.post(req.models.users, data)
-			.then((user: UsersAttributes) =>
-				this.cacheCheck(
-					this.pageCache,
-					this.nameCache
-				)(user ? this.response.success(res, 'post', user.id) : this.response.failed(res, 'post'))
-			)
+			.then((user: UsersAttributes) => this.response.success(res, 'post', user))
 			.catch((error) => this.response.failed(res, 'post', error));
 	}
 
@@ -166,41 +100,26 @@ export class Users extends CoreMiddleware {
 	 * @apiName put
 	 * @apiGroup USERS
 	 * @apiPermission authenticated-user
-	 *
 	 * @apiDescription update user
 	 *
 	 * @apiParam (url segment) {String} id user id
+	 * @apiParam (body) {String} [code] user code
 	 * @apiParam (body) {String} [firstName] first name
 	 * @apiParam (body) {String} [lastName] last name
 	 * @apiParam (body) {String} [email] unique email address
-	 * @apiParam (body) {String} [password] MD5 hash password
-	 * @apiParam (body) {String} [phone] contact number
-	 * @apiParam (body) {String} [socialMedia=NONE] social media <br /> Expected Value: `FACEBOOK|INSTAGRAM|TWITTER`
-	 * @apiParam (body) {String} [socialMediaKey] social media key
-	 * @apiParam (body) {Number} [languageId] language id
-	 * @apiParam (body) {Number} [currencyId] currency id
-	 * @apiParam (body) {Boolean} [verified] is user verified
-	 * @apiParam (body) {Boolean} [active] is user active
+	 * @apiParam (body) {String} [phone] unique phone number
+	 * @apiParam (body) {Boolean} [active] is active user
 	 */
 	put(req: Request, res: Response): void {
-		const id = req.params.id;
-
 		const whereData = {
-			where: {
-				id: id,
-			},
+			_id: req.params.id as string,
 		};
 
-		const data = this.autoFillPutInformation(req.body, req.authentication);
+		const data = this.autoFillPutInformation(req.body, {});
 
-		return this.query
-			.put(req.models.users, data, whereData)
-			.then((user: number[]) =>
-				this.cacheCheck(
-					this.pageCache,
-					this.nameCache
-				)(user[0] ? this.response.success(res, 'put', id) : this.response.failed(res, 'put'))
-			)
+		return this.mongo
+			.update(req.models.users, whereData, data)
+			.then((user: UsersAttributes) => this.response.success(res, 'put', user))
 			.catch((error) => this.response.failed(res, 'put', error));
 	}
 
@@ -210,81 +129,38 @@ export class Users extends CoreMiddleware {
 	 * @apiName delete
 	 * @apiGroup USERS
 	 * @apiPermission authenticated-user
-	 *
 	 * @apiDescription delete user
 	 *
 	 * @apiParam (url segment) {String} id user id
+	 * @apiParam (url parameter) {Boolean} force is force delete Ex. ?force=true
 	 */
 	delete(req: Request, res: Response): void {
-		const id = req.params.id;
 		const whereData = {
-			where: {
-				id: id,
-			},
+			_id: req.params.id as string,
 		};
 
-		return this.query
-			.put(req.models.users, { active: false, updatedUserId: req.authentication.id || null }, whereData)
-			.then((users: number[]) =>
-				this.cacheCheck(
-					this.pageCache,
-					this.nameCache
-				)(users[0] ? this.response.success(res, 'delete', id) : this.response.failed(res, 'delete'))
-			)
-			.catch((error) => this.response.failed(res, 'delete', error));
+		const force: boolean = req.query.force && req.query.force === 'true' ? true : false;
+
+		if (force) {
+			return this.mongo
+				.delete(req.models.users, whereData)
+				.then((user: UsersAttributes) => this.response.success(res, 'delete', user))
+				.catch((error) => this.response.failed(res, 'delete', error));
+		} else {
+			const data = { active: false };
+			return this.mongo
+				.update(req.models.users, whereData, data)
+				.then((user: UsersAttributes) => this.response.success(res, 'delete', user))
+				.catch((error) => this.response.failed(res, 'delete', error));
+		}
 	}
 
-	protected getInclude(model: any): Array<any> {
-		const includedData: Array<any> = [
-			{
-				model: model.roles,
-				required: true,
-				attributes: ['id', 'name', 'permissionLevel'],
-			},
-			{
-				model: model.languages,
-				required: false,
-				attributes: ['id', 'code', 'name'],
-			},
-			{
-				model: model.countries,
-				required: false,
-				attributes: ['id', 'code', 'name'],
-			},
-		];
+	protected autoFillPostInformation(data: object = {}, authData: object = {}): object {
+		data['active'] = true;
+		data['key'] = this.helper.generateRandomString(50);
 
-		return includedData;
-	}
-
-	protected autoFillPostInformation(data: UsersAttributes, authData: Object = {}) {
-		if (typeof data.password !== 'undefined') {
-			data.salt = this.helper.generateRandomString();
-			data.password = this.helper.getPassword(data.password, data.salt);
-			data.passwordExpiry = this.helper.passwordExpiry;
-		}
-
-		data.roleId = data.roleId ? Number(data.roleId) : this.helper.defaultUserRole;
-
-		if (typeof authData['id'] !== 'undefined') {
-			data.createdUserId = authData['id'];
-			data.updatedUserId = authData['id'];
-		}
-
-		return data;
-	}
-
-	protected autoFillPutInformation(data: UsersAttributes, authData: Object = {}): Object {
-		if (typeof data.password !== 'undefined') {
-			data.salt = this.helper.generateRandomString();
-			data.password = this.helper.getPassword(data.password, data.salt);
-			data.passwordExpiry = this.helper.passwordExpiry;
-		}
-
-		if (typeof authData['id'] !== 'undefined') {
-			data.updatedUserId = authData['id'];
-		}
-
-		delete data.username;
+		data['createdAt'] = new Date();
+		data['updatedAt'] = new Date();
 
 		return data;
 	}
